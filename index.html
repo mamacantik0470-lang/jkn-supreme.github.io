@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Review Assist Pro v17.8 - Classic Supreme UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let firebaseConfig = {};
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch(e) { console.warn("Firebase config not found."); }
+
+        async function initSync() {
+            if (Object.keys(firebaseConfig).length === 0) return;
+            try {
+                const app = initializeApp(firebaseConfig);
+                window.auth = getAuth(app);
+                window.db = getFirestore(app);
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                onAuthStateChanged(window.auth, (user) => {
+                    const status = document.getElementById('cloudStatus');
+                    if (status && user) {
+                        status.innerHTML = `<span class="flex items-center gap-2 text-emerald-600 font-bold"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Classic Supreme Active</span>`;
+                    }
+                });
+            } catch (e) { console.error(e); }
+        }
+        initSync();
+
+        // Export signOut to window for logout function
+        window.firebaseLogout = async () => {
+            if (window.auth) await signOut(window.auth);
+        };
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        :root { --primary: #0f172a; --accent: #2563eb; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .card-pro { background: white; border: 1px solid #e2e8f0; border-radius: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .tab-btn.active { color: white; background-color: var(--accent); box-shadow: 0 10px 15px -3px rgba(37,99,235,0.3); }
+        .badge-dispute { background: #fee2e2; color: #b91c1c; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 10px; }
+        .badge-clean { background: #ecfdf5; color: #047857; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 10px; }
+        .mencolok-berkedip { animation: neon-blink 1s infinite alternate; background: #ef4444; color: white; padding: 2px 8px; border-radius: 6px; font-weight: 900; }
+        @keyframes neon-blink { from { opacity: 1; } to { opacity: 0.4; } }
+        
+        .table-container { max-height: calc(100vh - 420px); overflow-y: auto; overflow-x: auto; position: relative; border-radius: 1.5rem; border: 1px solid #e2e8f0; }
+        .table-container th { position: sticky; top: 0; z-index: 50; background-color: #0f172a; color: white; border-bottom: 2px solid #334155; }
+        .scrollbar-custom::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-custom::-webkit-scrollbar-track { background: #f1f5f9; }
+        .scrollbar-custom::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .modal-overlay { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .sticky-col { position: sticky; left: 0; z-index: 20; background: inherit; }
+        .filter-select { appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+        .logic-box { background: #f1f5f9; border-left: 4px solid #334155; padding: 12px; border-radius: 0 12px 12px 0; font-family: monospace; font-size: 10px; color: #475569; }
+        .suggestion-card { background: #fdf2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 12px; margin-top: 8px; }
+    </style>
+</head>
+<body class="min-h-screen pb-20">
+
+    <!-- MODAL EDITOR RULE -->
+    <div id="modalRule" class="fixed inset-0 z-[600] hidden flex items-center justify-center p-6 modal-overlay">
+        <div class="bg-white w-full max-w-2xl rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in duration-300">
+            <h3 class="text-2xl font-black uppercase italic tracking-tighter mb-8" id="ruleModalTitle">Editor Rule Supreme</h3>
+            <input type="hidden" id="editRuleKey">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Kode BA / ID</label>
+                    <input type="text" id="ruleId" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs font-bold focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Kategori</label>
+                    <select id="ruleCat" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs font-bold outline-none">
+                        <option value="Koding ICD-10">Koding ICD-10</option>
+                        <option value="Koding Prosedur">Koding Prosedur</option>
+                        <option value="Regulasi">Regulasi</option>
+                        <option value="Administrasi">Administrasi</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Nama Aturan</label>
+                    <input type="text" id="ruleTitle" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs font-bold focus:border-blue-500 outline-none">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Keyword (Pisahkan Koma)</label>
+                    <input type="text" id="ruleLogic" placeholder="Contoh: R50,R51,U07" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs font-bold focus:border-blue-500 outline-none">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Deskripsi Audit</label>
+                    <textarea id="ruleDesc" rows="3" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 text-xs font-bold focus:border-blue-500 outline-none"></textarea>
+                </div>
+            </div>
+            <div class="flex gap-4 mt-10">
+                <button onclick="window.closeRuleModal()" class="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-[10px]">Batal</button>
+                <button onclick="window.saveRule()" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-blue-600/20">Simpan Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADER -->
+    <div id="loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[500] hidden flex items-center justify-center">
+        <div class="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center space-y-6">
+            <div class="flex justify-center"><div class="w-12 h-12 border-4 border-blue-100 border-l-blue-600 rounded-full animate-spin"></div></div>
+            <h3 class="text-xl font-black text-slate-800 uppercase italic tracking-tighter">Sistem fxslamet</h3>
+            <div id="loaderPct" class="text-3xl font-black text-blue-600 italic">0%</div>
+        </div>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="loginScreen" class="fixed inset-0 bg-[#0f172a] z-[100] flex items-center justify-center p-6 text-center">
+        <div class="bg-white p-12 rounded-[3rem] shadow-2xl max-w-md w-full">
+            <div class="mb-10 text-center">
+                <div class="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-blue-500/30">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                </div>
+                <h2 class="text-3xl font-black uppercase tracking-tighter text-slate-800 leading-none italic">Assist Pro <span class="text-blue-600">v17.8</span></h2>
+                <div class="mt-4"><span class="mencolok-berkedip text-[10px] uppercase tracking-widest tracking-tighter">Created by fxslamet</span></div>
+            </div>
+            <input type="password" id="passkeyInput" onkeydown="if(event.key === 'Enter') window.handleLogin()" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 mb-6 text-center text-xl font-black tracking-[0.5em] outline-none focus:border-blue-500 transition-all shadow-inner" placeholder="••••••••">
+            <button onclick="window.handleLogin()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 active:scale-95 transition-all">Masuk Sistem</button>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="mainApp" class="max-w-[1750px] mx-auto pt-10 px-8 hidden">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+            <div class="flex items-center gap-6">
+                <div>
+                    <h1 class="text-3xl font-black tracking-tighter uppercase italic leading-none">Audit JKN <span class="text-blue-600">Supreme v17.8</span></h1>
+                    <div id="cloudStatus" class="mt-2 text-[11px] font-black uppercase tracking-widest text-slate-400 italic">Auth: fxslamet authorized</div>
+                </div>
+                <button onclick="window.handleLogout()" class="bg-red-50 text-red-600 p-3 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm border border-red-100 group flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <span class="text-[10px] font-black uppercase italic hidden group-hover:inline">Keluar</span>
+                </button>
+            </div>
+            <nav class="bg-white p-1.5 rounded-2xl flex gap-1 shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
+                <button onclick="window.switchTab('tabHome')" id="btn-tabHome" class="tab-btn active px-5 py-3 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap">Import</button>
+                <button onclick="window.switchTab('tabReview')" id="btn-tabReview" class="tab-btn px-5 py-3 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap">Hasil Scan</button>
+                <button onclick="window.switchTab('tabLog')" id="btn-tabLog" class="tab-btn px-5 py-3 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap">Log Unggah</button>
+                <button onclick="window.switchTab('tabAnalisa')" id="btn-tabAnalisa" class="tab-btn px-5 py-3 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap">Rekap Unit</button>
+                <button onclick="window.switchTab('tabCatalog')" id="btn-tabCatalog" class="tab-btn px-5 py-3 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap">Katalog Rule</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- TAB HOME -->
+            <div id="tabHome" class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 card-pro p-16 border-4 border-dashed border-slate-200 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all" onclick="el('fileIn').click()">
+                        <input type="file" id="fileIn" accept=".xlsx,.csv,.txt" multiple class="hidden" onchange="window.handleFile(event)">
+                        <div class="w-24 h-24 bg-blue-100 rounded-3xl flex items-center justify-center text-blue-600 mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        </div>
+                        <h3 class="text-2xl font-black uppercase italic tracking-tighter text-slate-800 leading-none">Upload Dataset</h3>
+                        <p class="text-slate-400 text-[10px] mt-4 font-bold uppercase tracking-[0.3em]">Supreme Logic System - Created by fxslamet</p>
+                    </div>
+                    <div class="card-pro p-10 flex flex-col justify-center bg-[#0f172a] text-white relative overflow-hidden shadow-2xl text-center">
+                        <button id="btnAudit" onclick="window.runSupremeAudit()" disabled class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-blue-600/30 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 active:scale-95 transition-all">Audit & Analisa</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB REVIEW -->
+            <div id="tabReview" class="hidden space-y-6">
+                <div class="bg-white p-8 rounded-[2rem] border shadow-sm flex flex-wrap items-center justify-between gap-6">
+                    <div class="flex flex-wrap items-center gap-6">
+                        <select id="filterYear" onchange="window.refreshReview()" class="filter-select bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-[10px] font-black uppercase outline-none min-w-[120px]"></select>
+                        <label class="flex items-center gap-3 cursor-pointer group leading-none">
+                            <input type="checkbox" id="chkOnlyBad" onchange="window.refreshReview()" class="w-6 h-6 rounded-lg border-2 border-slate-200 text-blue-600 focus:ring-0 cursor-pointer">
+                            <span class="text-[10px] font-black uppercase italic text-slate-600">Dispute Saja</span>
+                        </label>
+                    </div>
+                    <button onclick="window.exportFullData()" class="bg-[#0f172a] text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg hover:scale-105 transition-all italic">Export Semua Kolom (.xlsx)</button>
+                </div>
+                <div class="card-pro border-none shadow-2xl overflow-hidden">
+                    <div class="table-container scrollbar-custom">
+                        <table class="w-full text-left border-collapse min-w-[1800px]">
+                            <thead>
+                                <tr class="text-white uppercase text-[10px] font-black italic tracking-widest bg-slate-900">
+                                    <th class="p-8">SEP & Pasien</th>
+                                    <th class="p-8">Unit / Poli</th>
+                                    <th class="p-8">DPJP (Dokter)</th>
+                                    <th class="p-8">Koding Dx/Proc</th>
+                                    <th class="p-8 text-center">Audit</th>
+                                    <th class="p-8">Detail & Saran Rigid</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reviewBody" class="divide-y bg-white text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB LOG -->
+            <div id="tabLog" class="hidden space-y-6">
+                <div class="card-pro overflow-hidden border-none shadow-2xl">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-900 text-white uppercase text-[9px] font-black italic">
+                            <tr>
+                                <th class="p-6">Waktu Unggah</th>
+                                <th class="p-6">Nama File</th>
+                                <th class="p-6">Jumlah Kasus</th>
+                                <th class="p-6 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logBody" class="divide-y bg-white text-slate-600"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB ANALISA -->
+            <div id="tabAnalisa" class="hidden space-y-8 animate-in fade-in duration-500">
+                <div class="card-pro overflow-hidden border-none shadow-2xl">
+                    <div class="p-8 bg-slate-50 border-b flex justify-between items-center">
+                        <h3 class="text-sm font-black uppercase italic tracking-tighter text-slate-800">Rekapitulasi SMF & Unit (Breakdown RI/RJ)</h3>
+                        <button onclick="window.exportRekapAnalisa()" class="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg hover:scale-105 transition-all italic">Download Rekap (.xlsx)</button>
+                    </div>
+                    <div class="overflow-x-auto scrollbar-custom">
+                        <table class="w-full text-left border-collapse min-w-[1600px]">
+                            <thead class="bg-slate-900 text-white uppercase text-[9px] font-black italic tracking-widest">
+                                <tr>
+                                    <th class="p-6 sticky-col bg-slate-900" rowspan="2">Unit / Poli</th>
+                                    <th class="p-6" rowspan="2">DPJP Utama</th>
+                                    <th class="p-6 text-center border-b border-slate-700" colspan="3">Jumlah Pasien</th>
+                                    <th class="p-6 text-center border-b border-slate-700" colspan="3">Nilai INA-CBG</th>
+                                    <th class="p-6" rowspan="2">Biaya RS</th>
+                                    <th class="p-6" rowspan="2">Selisih</th>
+                                    <th class="p-6 text-center" rowspan="2">Ratio</th>
+                                </tr>
+                                <tr>
+                                    <th class="p-4 text-center bg-slate-800">RI</th>
+                                    <th class="p-4 text-center bg-slate-800">RJ</th>
+                                    <th class="p-4 text-center bg-slate-800">Total</th>
+                                    <th class="p-4 text-center bg-slate-800">INA RI</th>
+                                    <th class="p-4 text-center bg-slate-800">INA RJ</th>
+                                    <th class="p-4 text-center bg-slate-800">Total INA</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rekapBody" class="divide-y bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB CATALOG -->
+            <div id="tabCatalog" class="hidden animate-in fade-in duration-500">
+                <div class="flex justify-between items-center mb-10">
+                    <div>
+                        <h2 class="text-2xl font-black uppercase italic tracking-tighter text-slate-800">Knowledge Base <span class="text-blue-600">Rule Audit</span></h2>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Daftar Algoritma Audit Otomatis v17.8</p>
+                    </div>
+                    <button onclick="window.promptManageRules()" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] shadow-lg hover:scale-105 transition-all">Kelola Rule (fxslamet Only)</button>
+                </div>
+                <div id="catalogContent" class="grid grid-cols-1 xl:grid-cols-2 gap-8"></div>
+            </div>
+            
+            <footer class="mt-20 text-center opacity-30 pb-10">
+                <p class="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">Doctor Review Assist Pro v17.8 • Supreme Classic Edition • Created by fxslamet</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        /** --- DATABASE LOGIKA --- **/
+        const DEFAULT_RULES = {
+            "RULE-68": { id: "68", cat: "Koding ICD-10", t: "Symptom Diagnosa Sekunder", d: "Gejala (R-Code) dilarang pada posisi sekunder karena sudah terwakili diagnosa utama.", logic: "Mendeteksi R50,R51,R10,R11,R05 pada diagnosa sekunder.", keywords: "R50,R51,R10,R11,R05", solution: "Hapus diagnosa sekunder gejala untuk menghindari klaim ganda/redundansi koding." },
+            "BA24-01": { id: "BA24-01", cat: "Regulasi", t: "Admisi IGD-RI (BA 2024)", d: "Rawat inap via IGD wajib observasi > 6 Jam atau visitasi DPJP Spesialis.", logic: "Jika RI dari IGD DAN DPJP bukan Spesialis.", keywords: "IGD,GAWAT,EMERGENCY", solution: "Pastikan kelengkapan berkas visitasi Spesialis atau sesuaikan kriteria admisi RITL." },
+            "BA20-COV": { id: "BA20-COV", cat: "Koding ICD-10", t: "COVID-19 Endemi", d: "Larangan kode darurat U07 di masa endemi. Gunakan B34.2.", logic: "Mencari string 'U07' tanpa keberadaan 'B34.2'.", keywords: "U07,CORONA,COVID", solution: "Ganti kode darurat U07 ke kode standar endemi B34.2 sesuai regulasi terbaru." }
+        };
+
+        window.rawData = []; 
+        window.fileLogs = JSON.parse(localStorage.getItem('supreme_logs') || '[]');
+        window.customRules = JSON.parse(localStorage.getItem('supreme_custom_rules') || '{}');
+        window.el = (id) => document.getElementById(id);
+
+        /** --- AUTH --- **/
+        window.handleLogin = () => {
+            if(el('passkeyInput').value.toUpperCase() === 'FXSLAMET') {
+                el('loginScreen').classList.add('hidden'); el('mainApp').classList.remove('hidden');
+                window.renderCatalog(); window.renderLogs();
+            } else { alert("Akses Ditolak. Hubungi fxslamet."); }
+        };
+
+        window.handleLogout = async () => {
+            if(confirm("Apakah Anda yakin ingin keluar dari sistem supreme?")) {
+                // Firebase Signout
+                if(window.firebaseLogout) await window.firebaseLogout();
+                
+                // Clear state & UI
+                el('loginScreen').classList.remove('hidden');
+                el('mainApp').classList.add('hidden');
+                el('passkeyInput').value = '';
+                window.rawData = [];
+                if(el('btnAudit')) el('btnAudit').disabled = true;
+                window.switchTab('tabHome');
+            }
+        };
+
+        window.promptManageRules = () => {
+            const pass = prompt("Konfirmasi Passkey (fxslamet):");
+            if(pass && pass.toUpperCase() === 'FXSLAMET') window.openRuleModal();
+        };
+
+        window.openRuleModal = (key = null) => {
+            const m = el('modalRule'); if (m) m.classList.remove('hidden');
+            if(key) {
+                const r = window.customRules[key];
+                el('ruleModalTitle').innerText = "Edit Logika Audit";
+                el('editRuleKey').value = key; el('ruleId').value = r.id; el('ruleCat').value = r.cat; el('ruleTitle').value = r.t; el('ruleLogic').value = r.keywords; el('ruleDesc').value = r.d;
+            } else {
+                el('ruleModalTitle').innerText = "Tambah Logika Baru";
+                el('editRuleKey').value = ""; el('ruleId').value = ""; el('ruleTitle').value = ""; el('ruleLogic').value = ""; el('ruleDesc').value = "";
+            }
+        };
+        window.closeRuleModal = () => el('modalRule').classList.add('hidden');
+
+        window.saveRule = () => {
+            const key = el('editRuleKey').value || "CUSTOM-" + Date.now();
+            window.customRules[key] = {
+                id: el('ruleId').value, cat: el('ruleCat').value, t: el('ruleTitle').value,
+                keywords: el('ruleLogic').value, d: el('ruleDesc').value, solution: "Sesuaikan dokumentasi koding."
+            };
+            localStorage.setItem('supreme_custom_rules', JSON.stringify(window.customRules));
+            window.closeRuleModal(); window.renderCatalog();
+        };
+
+        /** --- AUDIT CORE --- **/
+        window.runSupremeAudit = async () => {
+            const loader = el('loader');
+            if (loader) loader.classList.remove('hidden');
+            const allRules = { ...DEFAULT_RULES, ...window.customRules };
+            const data = window.rawData;
+
+            for(let i=0; i<data.length; i++) {
+                const c = data[i]; const m = c._meta; let findings = [];
+                Object.values(allRules).forEach(r => {
+                    const keys = r.keywords.split(',').map(k => k.trim().toUpperCase());
+                    const searchable = (m.dx + " " + m.proc + " " + m.poli).toUpperCase();
+                    if(r.id === "68") {
+                        const parts = m.dx.split(/[;,]/);
+                        if(parts.length > 1) {
+                            const secondary = parts.slice(1).join(' ').toUpperCase();
+                            const detected = keys.filter(k => secondary.includes(k));
+                            if(detected.length > 0) {
+                                findings.push({ id: r.id, title: r.t, reason: `Terdeteksi kode gejala [${detected.join(', ')}] pada posisi Diagnosa Sekunder, sedangkan Diagnosa Utama [${parts[0]}] secara klinis sudah mencakup gejala tersebut.`, suggestion: `Segera hapus kode redundan [${detected.join(', ')}] pada klaim dengan SEP ${m.sep} Tanggal ${m.admS} ini sesuai kaidah koding rigid JKN.` });
+                            }
+                        }
+                    } else if(r.id === "BA24-01") {
+                        if(m.ptd === "RI" && m.poli.includes("IGD") && !m.dpjp.includes("SP.")) {
+                            findings.push({ id: r.id, title: r.t, reason: `Admisi RITL berasal dari IGD namun dilayani oleh Dokter Umum [${m.dpjp}]. Berdasarkan BA 2024, kriteria rawat inap dari IGD wajib memiliki visitasi Spesialis.`, suggestion: `Pastikan lampiran bukti visitasi Dokter Spesialis untuk SEP ${m.sep} Tanggal ${m.admS} tersedia atau lakukan kroscek durasi observasi.` });
+                        }
+                    } else if(r.id === "BA20-COV") {
+                        if(searchable.includes("U07") && !searchable.includes("B34.2")) {
+                            findings.push({ id: r.id, title: r.t, reason: `Ditemukan penggunaan kode darurat pandemi U07 pada Diagnosa [${m.dx}]. Kode ini sudah tidak berlaku untuk klaim JKN era endemi.`, suggestion: `Lakukan re-coding pada SEP ${m.sep} Tanggal ${m.admS} ini menjadi B34.2 (Konfirmasi Positif) atau Z03.8 (Suspek) sesuai BA 2020.` });
+                        }
+                    } else {
+                        const detected = keys.filter(k => searchable.includes(k));
+                        if(detected.length > 0) {
+                            findings.push({ id: r.id, title: r.t, reason: `Terdeteksi kata kunci audit [${detected.join(', ')}] pada data pelayanan SEP ${m.sep}.`, suggestion: `Lakukan verifikasi rigid pada berkas klaim Tanggal ${m.admS} ini untuk memastikan kepatuhan terhadap aturan #${r.id}.` });
+                        }
+                    }
+                });
+                m.detailedFinds = findings;
+                if(i % 300 === 0) {
+                    const pct = Math.round((i/data.length)*100);
+                    const pctEl = el('loaderPct');
+                    if (pctEl) pctEl.innerText = pct + "%";
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
+            if (loader) loader.classList.add('hidden'); 
+            window.switchTab('tabReview');
+        };
+
+        /** --- FILE HELPERS --- **/
+        window.handleFile = async (e) => {
+            const files = e.target.files; if(!files.length) return;
+            const loader = el('loader');
+            if (loader) loader.classList.remove('hidden');
+            for(let f of files) {
+                const reader = new FileReader();
+                await new Promise((resolve) => {
+                    reader.onload = (ev) => {
+                        try {
+                            const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+                            const sheet = wb.Sheets[wb.SheetNames[0]];
+                            const parsed = XLSX.utils.sheet_to_json(sheet);
+                            const headers = Object.keys(parsed[0]);
+                            const findKey = (syns) => headers.find(h => syns.some(s => String(h).toUpperCase().includes(s.toUpperCase()))) || null;
+                            const keys = {
+                                sep: findKey(['SEP', 'REGISTRASI', 'NO_SEP']),
+                                patient: findKey(['PASIEN', 'NAMA']),
+                                dx: findKey(['DIAGLIST', 'DX', 'DIAGNOSA', 'ICD10']),
+                                proc: findKey(['PROCLIST', 'PROC', 'PROSEDUR', 'ICD9']),
+                                poli: findKey(['POLI', 'UNIT', 'INSTALASI']),
+                                ptd: findKey(['PTD', 'TIPE', 'JENIS_RAWAT']),
+                                dpjp: findKey(['DPJP', 'DOKTER', 'NAMA_DOKTER']),
+                                tIna: findKey(['TARIF_INACBG', 'INA_CBG', 'KLAIM']),
+                                tRs: findKey(['TARIF_RS', 'BIAYA_RIIL', 'BILLING', 'TOTAL']),
+                                date: findKey(['MASUK', 'ADMISSION', 'TGL_MASUK'])
+                            };
+                            const procData = parsed.map(row => {
+                                const rawDate = row[keys.date];
+                                const inTs = window.parseDate(rawDate);
+                                return {
+                                    ...row,
+                                    _meta: {
+                                        sep: String(row[keys.sep] || "-"),
+                                        patient: String(row[keys.patient] || "-"),
+                                        dx: String(row[keys.dx] || "-"),
+                                        proc: String(row[keys.proc] || "-"),
+                                        poli: String(row[keys.poli] || "UMUM").toUpperCase(),
+                                        ptd: String(row[keys.ptd] || "2").includes("1") || String(row[keys.ptd]).toUpperCase().includes("RI") ? "RI" : "RJ",
+                                        dpjp: String(row[keys.dpjp] || "").toUpperCase(),
+                                        tIna: parseFloat(row[keys.tIna]) || 0,
+                                        tRs: parseFloat(row[keys.tRs]) || 0,
+                                        year: inTs ? new Date(inTs).getFullYear() : null,
+                                        admS: window.formatDateString(rawDate),
+                                        detailedFinds: []
+                                    }
+                                };
+                            });
+                            window.rawData = [...window.rawData, ...procData];
+                            window.fileLogs.unshift({ id: crypto.randomUUID(), timestamp: new Date().toLocaleString('id-ID'), fileName: f.name, rowCount: procData.length });
+                            localStorage.setItem('supreme_logs', JSON.stringify(window.fileLogs));
+                        } catch(err) { console.error(err); }
+                        resolve();
+                    };
+                    reader.readAsArrayBuffer(f);
+                });
+            }
+            if (loader) loader.classList.add('hidden');
+            if (el('btnAudit')) el('btnAudit').disabled = false;
+            window.updateTimelineFilters();
+        };
+
+        window.refreshReview = () => {
+            const filterDis = el('chkOnlyBad')?.checked || false;
+            const filterY = el('filterYear')?.value || 'all';
+            const d = window.rawData.filter(x => (filterDis ? x._meta.detailedFinds.length > 0 : true) && (filterY === 'all' ? true : x._meta.year === parseInt(filterY)));
+            const rb = el('reviewBody');
+            if (rb) {
+                rb.innerHTML = d.map(x => `<tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-8"><div class="text-[9px] font-black text-slate-400 mb-1">SEP: ${x._meta.sep}</div><div class="font-black text-slate-800 text-sm uppercase">${x._meta.patient}</div></td>
+                    <td class="p-8"><div class="text-[10px] font-black text-slate-700 uppercase tracking-tighter">${x._meta.poli}</div></td>
+                    <td class="p-8"><div class="text-[10px] font-black text-blue-700 uppercase italic">${x._meta.dpjp}</div></td>
+                    <td class="p-8"><div class="space-y-1"><div class="bg-slate-50 px-3 py-1 rounded-lg text-[9px] font-bold">D: ${x._meta.dx}</div><div class="bg-slate-50 px-3 py-1 rounded-lg text-[9px] font-bold">P: ${x._meta.proc}</div></div></td>
+                    <td class="p-8 text-center"><span class="${x._meta.detailedFinds.length?'badge-dispute':'badge-clean'}">${x._meta.detailedFinds.length?'Dispute':'Valid'}</span></td>
+                    <td class="p-8">
+                        ${x._meta.detailedFinds.map(f => `
+                            <div class="suggestion-card">
+                                <div class="text-[10px] font-black text-rose-700 uppercase italic">?? Melanggar Rule #${f.id}</div>
+                                <div class="text-[9px] font-bold text-slate-600 mt-1 uppercase">${f.reason}</div>
+                                <div class="bg-white border border-rose-100 rounded-lg p-2 mt-2 text-[9px] font-black text-blue-800 italic uppercase">?? Saran: ${f.suggestion}</div>
+                            </div>
+                        `).join('') || '<div class="text-emerald-500 font-black italic text-[10px] uppercase text-center tracking-widest">Berkas Lolos Verifikasi Rigid</div>'}
+                    </td>
+                </tr>`).join('');
+            }
+        };
+
+        window.refreshAnalisa = () => {
+            const gr = {};
+            window.rawData.forEach(x => {
+                const m = x._meta; const p = m.poli; const d = m.dpjp;
+                if(!gr[p]) gr[p] = {}; if(!gr[p][d]) gr[p][d] = { ri: 0, rj: 0, inaRI: 0, inaRJ: 0, rs: 0 };
+                const g = gr[p][d]; if(m.ptd === "RI") { g.ri++; g.inaRI += m.tIna; } else { g.rj++; g.inaRJ += m.tIna; } g.rs += m.tRs;
+            });
+            let h = "";
+            Object.keys(gr).sort().forEach(p => {
+                const docs = gr[p]; const dk = Object.keys(docs).sort();
+                dk.forEach((d, i) => {
+                    const g = docs[d]; const totalPasien = g.ri + g.rj; const totalINA = g.inaRI + g.inaRJ; const dif = totalINA - g.rs; const rat = g.rs > 0 ? Math.round((totalINA / g.rs)*100) : 0;
+                    h += `<tr class="text-[10px] hover:bg-slate-50">
+                        ${i === 0 ? `<td class="p-6 font-black bg-slate-50 text-blue-600 sticky-col border-r" rowspan="${dk.length}">${p}</td>` : ''}
+                        <td class="p-6 font-bold uppercase">${d}</td>
+                        <td class="p-6 text-center text-slate-500">${g.ri}</td>
+                        <td class="p-6 text-center text-slate-500">${g.rj}</td>
+                        <td class="p-6 text-center font-black bg-slate-50">${totalPasien}</td>
+                        <td class="p-6 text-right font-medium text-emerald-600">Rp ${Math.round(g.inaRI).toLocaleString()}</td>
+                        <td class="p-6 text-right font-medium text-blue-600">Rp ${Math.round(g.inaRJ).toLocaleString()}</td>
+                        <td class="p-6 text-right font-black bg-slate-50">Rp ${Math.round(totalINA).toLocaleString()}</td>
+                        <td class="p-6 text-right font-bold text-slate-400">Rp ${Math.round(g.rs).toLocaleString()}</td>
+                        <td class="p-6 text-right font-black ${dif>=0?'text-emerald-600':'text-red-600'}">Rp ${Math.round(dif).toLocaleString()}</td>
+                        <td class="p-6 text-center"><span class="px-2 py-1 rounded-lg font-black ${rat>=100?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}">${rat}%</span></td>
+                    </tr>`;
+                });
+            });
+            if (el('rekapBody')) el('rekapBody').innerHTML = h || `<tr><td colspan="11" class="p-10 text-center text-slate-400">Menunggu Data Audit</td></tr>`;
+        };
+
+        window.renderCatalog = () => {
+            const cc = el('catalogContent'); if(!cc) return;
+            const allRules = { ...DEFAULT_RULES, ...window.customRules };
+            cc.innerHTML = Object.entries(allRules).map(([key, r]) => `
+                <div class="card-pro p-10 bg-white border-l-[10px] border-blue-600 relative overflow-hidden shadow-lg">
+                    <div class="flex justify-between items-start mb-4"><span class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">Rule #${r.id}</span></div>
+                    <h3 class="text-lg font-black text-slate-800 uppercase italic mb-2 tracking-tighter">${r.t}</h3>
+                    <p class="text-xs font-bold text-slate-500 leading-relaxed uppercase mb-6">${r.d}</p>
+                    <div class="logic-box"><div class="text-[8px] font-black uppercase text-slate-400 mb-1">Algoritma Audit:</div>${r.logic}</div>
+                </div>
+            `).join('');
+        };
+
+        window.renderLogs = () => { if (el('logBody')) el('logBody').innerHTML = window.fileLogs.map(l => `<tr class="text-[10px] hover:bg-slate-50 transition-colors font-bold"><td class="p-6">${l.timestamp}</td><td class="p-6 uppercase text-slate-800">${l.fileName}</td><td class="p-6 font-black text-blue-600 text-center">${l.rowCount}</td><td class="p-6 text-center"><span class="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[8px] uppercase font-black tracking-widest">Selesai</span></td></tr>`).join(''); };
+        window.switchTab = (id) => { ['tabHome','tabReview','tabLog','tabAnalisa','tabCatalog'].forEach(t => el(t)?.classList.toggle('hidden', t!==id)); ['btn-tabHome','btn-tabReview','btn-tabLog','btn-tabAnalisa','btn-tabCatalog'].forEach(b => el(b)?.classList.toggle('active', b===`btn-${id}`)); if(id === 'tabReview') window.refreshReview(); if(id === 'tabAnalisa') window.refreshAnalisa(); if(id === 'tabLog') window.renderLogs(); if(id === 'tabCatalog') window.renderCatalog(); };
+        window.parseDate = (v) => { if(!v) return 0; if(typeof v === 'number') return Math.round((v - 25569) * 86400 * 1000); const p = String(v).trim().split(/[\/\-\.\s]/); if(p.length >= 3) { if (p[0].length === 4) return new Date(p[0], p[1]-1, p[2]).getTime(); return new Date(p[2].length===2?2000+parseInt(p[2]):p[2], p[1]-1, p[0]).getTime(); } return new Date(v).getTime() || 0; };
+        window.formatDateString = (v) => { const ts = window.parseDate(v); return ts ? new Date(ts).toLocaleDateString('id-ID') : String(v).split(' ')[0]; };
+        window.updateTimelineFilters = () => { const ys = [...new Set(window.rawData.map(x => x._meta.year).filter(y => y !== null))].sort((a,b) => b-a); if(el('filterYear')) el('filterYear').innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join('') || '<option value="all">Semua</option>'; window.refreshReview(); };
+        
+        window.exportFullData = () => {
+            const exp = window.rawData.map(x => {
+                const { _meta, ...ori } = x;
+                return {
+                    ...ori,
+                    'NAMA_POLI_AUDIT': _meta.poli,
+                    'NAMA_DOKTER_AUDIT': _meta.dpjp,
+                    'HASIL_AUDIT_SUPREME': _meta.detailedFinds.map(f => `Rule #${f.id}: ${f.title}`).join(' | ') || 'VALID',
+                    'DETAIL_PENYEBAB': _meta.detailedFinds.map(f => f.reason).join(' | ') || '-',
+                    'SARAN_RIGID_FXSLAMET': _meta.detailedFinds.map(f => f.suggestion).join(' | ') || 'BERKAS LENGKAP'
+                };
+            });
+            const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(exp);
+            XLSX.utils.book_append_sheet(wb, ws, "AuditDetailed");
+            XLSX.writeFile(wb, "Audit_Supreme_Detailed_fxslamet.xlsx");
+        };
+
+        window.exportRekapAnalisa = () => { if(el('rekapBody')) { const wb = XLSX.utils.table_to_book(el('rekapBody').parentElement); XLSX.writeFile(wb, "Rekap_Unit_RI_RJ_fxslamet.xlsx"); } };
+    </script>
+</body>
+</html>
